@@ -1,0 +1,140 @@
+package server
+
+import (
+	"github.com/gin-gonic/contrib/static"
+	"github.com/gin-gonic/gin"
+	socketio "github.com/googollee/go-socket.io"
+	"strings"
+	"sushi/utils"
+	"sushi/utils/config"
+	"sushi/utils/ratelimit"
+)
+
+func NewRouter(server *Server, conf config.Config, socketserver *socketio.Server) *gin.Engine {
+	gin.SetMode(server.config.GinMode())
+	r := gin.Default()
+
+	r.Use(ratelimit.GinMiddleware())
+	r.Use(CORSMiddleware())
+	r.Use(static.Serve("/", static.LocalFile("/app/Demo-UI", true)))
+
+	//public
+	r.GET("/ping", server.controller.HandlePing)
+
+	//from game server(RSA 签名)
+	r.POST("/earn", server.controller.HandleEarn)
+
+	//from player
+
+	//Todo
+	r.GET("/swap_info") //balance rate swap_limit record(3)
+	//r.PUT("/withdraw", server.controller.HandleApplyWithdraw)
+
+	//from tx server
+	//r.POST("/withdraw", server.controller.HandleHandleWithdraw)
+	//r.PATCH("/withdraw", server.controller.HandleConfirmWithdraw)
+
+	//from admin(JWT 验证Mail,Sub)
+	//update rate
+	//update swapLimit
+
+	v1 := r.Group("/v1")
+	authorizedV1 := v1.Group("/")
+	authorizedV1.Use(server.GetAuth())
+	//
+	//v1Team := v1.Group("/teams")
+	//v1Team.Use(server.GetAuth())
+	//
+	//v2 := r.Group("/v2")
+	//v2_authorized := v2.Group("/")
+	//v2_authorized.Use(server.GetAuth())
+
+	//r.GET("/socket/*any", gin.WrapH(socketserver))
+	//r.POST("/socket/*any", gin.WrapH(socketserver))
+	//v1.POST("/user/signup", server.controller.user.HandleSignup)
+	//
+	//
+	WithUserRoutes(authorizedV1, server, conf)
+	//
+	//
+	//WithTeamRoutes(v1Team, server)
+	return r
+}
+
+func WithTeamRoutes(r *gin.RouterGroup, server *Server) {
+	//r.GET("/", server.controller.team.HandleTeamList)
+}
+
+func WithUserRoutes(r *gin.RouterGroup, server *Server, conf config.Config) {
+	authorized := r
+	//authorized.POST("/users/profile")
+	authorized.GET("/users/profile", server.controller.HandleGetUserInfo)
+	authorized.POST("/player", server.controller.HandleNewPlayer)
+	authorized.POST("/swap", server.controller.HandleSwap)
+	authorized.GET("/balance", server.controller.HandleGetBalance)
+	authorized.GET("/month_withdraw", server.controller.HandleGetMonthWithdraw)
+	authorized.GET("/earn_record", server.controller.HandleGetEarnRecords)
+	authorized.GET("/swap_record", server.controller.HandleGetSwapRecords)
+	authorized.GET("/withdraw_record", server.controller.HandleGetWithdrawRecords)
+	authorized.GET("/earn_total", server.controller.HandleGetEarnTotal)
+	authorized.GET("/withdraw_total", server.controller.HandleGetWithdrawTotal)
+	authorized.POST("/ethaddr", server.controller.HandleEditEthAddress)
+	//authorized.POST("/users/profile", server.controller.user.HandleUpdateUserInfo)
+	//authorized.GET("/users/profile", server.controller.user.HandleGetUserInfo)
+	//authorized.POST("/urls", server.controller.preSignURL.HandleURLRegister)
+}
+
+func (server Server) GetAuth() gin.HandlerFunc {
+
+	return func(c *gin.Context) {
+		c.Set("sub", "")
+		token := c.GetHeader("Authorization")
+
+		parts := strings.Split(token, " ")
+		if token == "" {
+			utils.ErrorResponse(c, 400, "token not found", "")
+			return
+		}
+
+		err := utils.VerifyFirebaseJWT(server.service.Firebase, *server.service.Ctx, parts[1])
+		if err != nil {
+			utils.ErrorResponse(c, 400, "wrong project", "")
+			return
+		}
+
+		detail, err := utils.CheckFirebaseJWT(parts[1])
+		if err != nil {
+			utils.ErrorResponse(c, 400, err.Error(), "")
+			return
+		}
+
+		firebaseSub := detail.Sub
+		c.Set("sub", firebaseSub)
+		c.Set("name", detail.Name)
+		c.Set("mail", detail.Email)
+	}
+}
+
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, X-Auth-Token, Authorization, Code, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT , PATCH")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
+}
+
+func adminAuth() gin.HandlerFunc {
+	accounts := gin.Accounts{
+		"larry":     "larrykey",
+		"scheduler": "schedulerkey",
+	}
+	return gin.BasicAuth(accounts)
+}
