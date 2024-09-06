@@ -22,6 +22,16 @@ type configData struct {
 	DBType           string `mapstructure:"db_type"`
 	DBConnectionPath string `mapstructure:"db_path"`
 
+	// worker
+	APIKey                 string `mapstructure:"api_key"`
+	NFTContractAddress     string `mapstructure:"nft_contract_address"`
+	WorkerPort             int    `mapstructure:"worker_port"`
+	SyncBlockNumber        uint64 `mapstructure:"sync_block_number"`
+	Network                string `mapstructure:"network"`
+	PaymentContractAddress string `mapstructure:"payment_contract_address"`
+
+	// nft expiry
+	NFTExpiryTime int `mapstructure:"nft_expiry_time"`
 	//TxProcessorConfig TxProcessorConfig `mapstructure:"tx_processor_config"`
 }
 
@@ -66,6 +76,37 @@ func (c *Config) GinMode() string {
 
 func (c *Config) LogFileLocation() string {
 	return c.config.LogFileLocation
+}
+
+func (c *Config) APIKey() string {
+	return c.config.APIKey
+}
+
+func (c *Config) NFTContractAddress() string {
+	return c.config.NFTContractAddress
+}
+
+func (c *Config) PaymentContractAddress() string {
+	return c.config.PaymentContractAddress
+}
+
+func (c *Config) Network() string {
+	return c.config.Network
+}
+
+func (c *Config) WorkerPort() int {
+	return c.config.WorkerPort
+}
+
+func (c *Config) NFTExpiryTime() int {
+	if c.config.NFTExpiryTime == 0 {
+		return 10 * 24 * 60 * 60 //10 days (unix)
+	}
+	return c.config.NFTExpiryTime
+}
+
+func (c *Config) SyncBlockNumber() uint64 {
+	return c.config.SyncBlockNumber
 }
 
 func (c *Config) LogLevel() logrus.Level {

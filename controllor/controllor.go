@@ -3,14 +3,16 @@ package controllor
 import (
 	"errors"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
+	"strconv"
 	"strings"
 	"sushi/model"
 	"sushi/service"
 	"sushi/utils"
 	"sushi/utils/config"
 	"sushi/utils/custom_errors"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 type Controller struct {
@@ -366,4 +368,34 @@ func (con *Controller) HandleEditEthAddress(c *gin.Context) {
 		return
 	}
 	utils.SuccessResponse(c, "ok", "")
+}
+
+func (con *Controller) HandleGetNfts(c *gin.Context) {
+	userinfo, err := getUserInfo(c)
+	if err != nil {
+		utils.ErrorResponse(c, 501, err.Error(), "")
+		return
+	}
+	queryParams := c.Request.URL.Query()
+
+	// Get a specific query parameter by key
+	limitStr := queryParams.Get("limit")
+	pageStr := queryParams.Get("page")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		limit = 20
+	}
+	page, err := strconv.Atoi(pageStr)
+	if err != nil {
+		page = 1
+	}
+
+	nfts, err := con.service.GetUserNfts(userinfo.Sub, page, limit)
+	if err != nil {
+		utils.ErrorResponse(c, 501, err.Error(), "")
+		return
+
+	}
+	utils.SuccessResponse(c, "ok", nfts)
 }
