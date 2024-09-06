@@ -75,6 +75,59 @@ type Blob struct {
 	BlobUniqueID uint64 `json:"blob_unique_id"`
 }
 
+type Contract struct {
+	ContractID          uint64 `gorm:"primaryKey" json:"-"`
+	Address             string `json:"address"`
+	Name                string `json:"name"`
+	Symbol              string `json:"symbol"`
+	TotalSupply         uint64 `json:"totalSupply"`
+	TokenType           string `json:"tokenType"`
+	ContractDeployer    string `json:"contractDeployer"`
+	DeployedBlockNumber uint64 `json:"deployedBlockNumber"`
+}
+
+type Collection struct {
+	CollectionID   uint64 `gorm:"primaryKey" json:"-"`
+	Name           string `json:"name"`
+	Slug           string `json:"slug"`
+	ExternalUrl    string `json:"externalUrl"`
+	BannerImageUrl string `json:"bannerImageUrl"`
+}
+
+type NFT struct {
+	NftID           uint64 `gorm:"primaryKey" json:"-"`
+	ContractID      uint64 `gorm:"index" json:"-"`
+	TokenId         string `json:"tokenId"`
+	TokenType       string `json:"tokenType"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	TokenUri        string `json:"tokenUri"`
+	CollectionID    uint64 `json:"-"`
+	Balance         string `json:"balance"`
+	TimeLastUpdated string `json:"timeLastUpdated"`
+}
+
+type NFTImage struct {
+	TokenId      string `gorm:"index" json:"-"`
+	CachedUrl    string `json:"cachedUrl"`
+	ThumbnailUrl string `json:"thumbnailUrl"`
+	PngUrl       string `json:"pngUrl"`
+	ContentType  string `json:"contentType"`
+	Size         uint64 `json:"size"`
+	OriginalUrl  string `json:"originalUrl"`
+}
+
+type Owner struct {
+	Address string `json:"address"`
+	TokenId string `json:"tokenId"`
+}
+
+type Attributes struct {
+	TokenId string `json:"-"`
+	Type    string `json:"Type"`
+	Rarity  string `json:"Rarity"`
+}
+
 func GetNameFromBlobID(id uint64) string {
 	BlobMap := make(map[uint64]string)
 	BlobMap[0] = "Tuna Roll"
@@ -108,4 +161,38 @@ type PlayerInfo struct {
 	//Blobs  []Blob `json:"blobs"`
 	Mail string `json:"mail"`
 	Sub  string `json:"sub"`
+}
+
+type LatestBlock struct {
+	CrawlKey          string `gorm:"unique"`
+	LatestBlockNumber uint64
+}
+
+type Network struct {
+	ChainID         int64
+	ContractAddress string `gorm:"unique"`
+	Name            string
+	Decimals        int64
+	Symbol          string
+	RpcUrl          string
+	ABI             string
+}
+
+type ConfirmStatus string
+
+const (
+	Confirming ConfirmStatus = "confirming"
+	Confirmed  ConfirmStatus = "confirmed"
+)
+
+type RechargeNFT struct {
+	Payer        string
+	Received     string
+	TokenAddress string
+	TokenID      string
+	ExpiryDate   uint64
+	Amount       uint64
+	Status       ConfirmStatus
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }

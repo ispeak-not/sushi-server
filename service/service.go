@@ -3,9 +3,7 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/jinzhu/now"
-	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
+	"math"
 	"strings"
 	"sushi/model"
 	"sushi/utils"
@@ -13,6 +11,10 @@ import (
 	"sushi/utils/config"
 	"sushi/utils/custom_errors"
 	"time"
+
+	"github.com/jinzhu/now"
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -691,4 +693,93 @@ func (svc *Service) EditEthAddress(sub string, ethAddress string) error {
 		return err
 	}
 	return nil
+}
+
+type Data struct {
+	Nfts       []NFT `json:"nfts"`
+	Page       int   `json:"page"`
+	Limit      int   `json:"limit"`
+	TotalPages int   `json:"totalPages"`
+	TotalItems int   `json:"totalItems"`
+}
+
+type NFTWithRecharge struct {
+	model.NFT
+	Amount     int64 `json:"rechargeAmount"`
+	ExpiryDate int64 `json:"expiryDate"`
+}
+
+type NFT struct {
+	NFTWithRecharge
+	Image      model.NFTImage     `json:"image"`
+	Attributes []model.Attributes `json:"attributes"`
+	Contract   model.Contract     `json:"contract"`
+	Collection model.Collection   `json:"collection"`
+}
+
+func (svc *Service) GetUserNfts(sub string, page int, limit int) (*Data, error) {
+	var player model.Player
+	var result Data
+	var nfts []NFT = make([]NFT, 0)
+	var nftWithRecharges []NFTWithRecharge
+
+	var count int64
+
+	player, err := svc.getPlayerBySub(sub)
+	if err != nil {
+		return nil, err
+	}
+	if player.EthAddress == nil {
+		return &Data{}, nil
+	}
+
+	queryNFTs := svc.db.DB.Table("nfts").
+		Select("*").
+		Joins("JOIN recharge_nfts ON recharge_nfts.token_id = nfts.token_id").
+		Where("lower(recharge_nfts.payer) = lower(?) AND recharge_nfts.status = ? AND recharge_nfts.expiry_date > unix_timestamp(NOW())", *player.EthAddress, model.Confirmed).
+		Count(&count).
+		Offset(int((page - 1) * limit)).
+		Limit(limit).
+		Find(&nftWithRecharges)
+	if queryNFTs.Error != nil {
+		return nil, err
+	}
+
+	for _, nft := range nftWithRecharges {
+		var image model.NFTImage
+		var contract model.Contract
+		var collection model.Collection
+		var attributes []model.Attributes
+
+		query := svc.db.DB.Where("contract_id = ?", nft.ContractID).First(&contract)
+		if query.Error != nil {
+			return nil, err
+		}
+		query = svc.db.DB.Where("collection_id = ?", nft.CollectionID).First(&collection)
+		if query.Error != nil {
+			return nil, err
+		}
+		query = svc.db.DB.Where("token_id = ?", nft.TokenId).First(&image)
+		if query.Error != nil {
+			return nil, err
+		}
+		query = svc.db.DB.Where("token_id = ?", nft.TokenId).Find(&attributes)
+		if query.Error != nil {
+			return nil, err
+		}
+		var data = NFT{
+			NFTWithRecharge: nft,
+			Image:           image,
+			Attributes:      attributes,
+			Contract:        contract,
+			Collection:      collection,
+		}
+		nfts = append(nfts, data)
+	}
+	result.Nfts = nfts
+	result.Page = int(page)
+	result.Limit = limit
+	result.TotalItems = int(count)
+	result.TotalPages = int(math.Ceil(float64(count) / float64(limit)))
+	return &result, nil
 }

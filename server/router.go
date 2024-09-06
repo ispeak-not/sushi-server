@@ -1,13 +1,14 @@
 package server
 
 import (
-	"github.com/gin-gonic/contrib/static"
-	"github.com/gin-gonic/gin"
-	socketio "github.com/googollee/go-socket.io"
 	"strings"
 	"sushi/utils"
 	"sushi/utils/config"
 	"sushi/utils/ratelimit"
+
+	"github.com/gin-gonic/contrib/static"
+	"github.com/gin-gonic/gin"
+	socketio "github.com/googollee/go-socket.io"
 )
 
 func NewRouter(server *Server, conf config.Config, socketserver *socketio.Server) *gin.Engine {
@@ -79,6 +80,7 @@ func WithUserRoutes(r *gin.RouterGroup, server *Server, conf config.Config) {
 	authorized.GET("/earn_total", server.controller.HandleGetEarnTotal)
 	authorized.GET("/withdraw_total", server.controller.HandleGetWithdrawTotal)
 	authorized.POST("/ethaddr", server.controller.HandleEditEthAddress)
+	authorized.GET("/nfts", server.controller.HandleGetNfts)
 	//authorized.POST("/users/profile", server.controller.user.HandleUpdateUserInfo)
 	//authorized.GET("/users/profile", server.controller.user.HandleGetUserInfo)
 	//authorized.POST("/urls", server.controller.preSignURL.HandleURLRegister)

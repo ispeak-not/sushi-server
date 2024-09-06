@@ -2,10 +2,11 @@ package DB
 
 import (
 	"fmt"
+	"sushi/model"
+
 	"github.com/sirupsen/logrus"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"sushi/model"
 )
 
 type DB struct {
@@ -49,6 +50,42 @@ func NewDB_MySQL(log *logrus.Logger, DBPath string) *DB {
 		return nil
 	}
 	err = _db.AutoMigrate(model.WithdrawRecord{})
+	if err != nil {
+		return nil
+	}
+	err = _db.AutoMigrate(model.Contract{})
+	if err != nil {
+		return nil
+	}
+	err = _db.AutoMigrate(model.Collection{})
+	if err != nil {
+		return nil
+	}
+	err = _db.AutoMigrate(model.NFTImage{})
+	if err != nil {
+		return nil
+	}
+	err = _db.AutoMigrate(model.NFT{})
+	if err != nil {
+		return nil
+	}
+	err = _db.AutoMigrate(model.Owner{})
+	if err != nil {
+		return nil
+	}
+	err = _db.AutoMigrate(model.Attributes{})
+	if err != nil {
+		return nil
+	}
+	err = _db.AutoMigrate(model.LatestBlock{})
+	if err != nil {
+		return nil
+	}
+	err = _db.AutoMigrate(model.Network{})
+	if err != nil {
+		return nil
+	}
+	err = _db.AutoMigrate(model.RechargeNFT{})
 	if err != nil {
 		return nil
 	}
