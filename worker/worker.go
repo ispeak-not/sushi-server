@@ -70,7 +70,8 @@ func CreateServer() *http.Server {
 }
 
 func NewJob(cron *cron.Cron, handler *Handler) *cron.Cron {
-	cron.AddFunc("0 0 * * *", handler.GetOwnersForContract)
+	fmt.Println("Cron job crawl nfts every run on", handler.conf.SpecSchedule())
+	cron.AddFunc(handler.conf.SpecSchedule(), handler.GetOwnersForContract)
 	handler.CrawlFromWeb3()
 	return cron
 }
