@@ -29,6 +29,7 @@ type configData struct {
 	SyncBlockNumber        uint64 `mapstructure:"sync_block_number"`
 	Network                string `mapstructure:"network"`
 	PaymentContractAddress string `mapstructure:"payment_contract_address"`
+	SpecSchedule           string `mapstructure:"spec_schedule"`
 
 	// nft expiry
 	NFTExpiryTime int `mapstructure:"nft_expiry_time"`
@@ -103,6 +104,13 @@ func (c *Config) NFTExpiryTime() int {
 		return 10 * 24 * 60 * 60 //10 days (unix)
 	}
 	return c.config.NFTExpiryTime
+}
+
+func (c *Config) SpecSchedule() string {
+	if c.config.SpecSchedule == "" {
+		return "0 * * * *" // At minute 0 every hour
+	}
+	return c.config.SpecSchedule
 }
 
 func (c *Config) SyncBlockNumber() uint64 {

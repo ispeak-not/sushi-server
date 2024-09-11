@@ -13,3 +13,4 @@ api_key:
 network: polygon-mainnet
 payment_contract_address: 
 sync_block_number:
+spec_schedule: 0 * * * * // At minute 0 every hour
