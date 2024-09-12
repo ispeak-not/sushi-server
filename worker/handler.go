@@ -404,13 +404,15 @@ func (handler *Handler) createRecharge(payer string, received string, tokenAddre
 	var exist model.RechargeNFT
 
 	result := handler.db.DB.Where(model.RechargeNFT{Payer: payer, TokenID: tokenId}).Last(&exist)
-	if result.Error != nil || exist.ExpiryDate < uint64(time.Now().Unix()) {
+	if result.Error != nil {
 		result = handler.db.DB.Create(&recharge)
 		if result.Error != nil {
 			return result.Error
 		}
 	} else if status != model.Confirming {
-		exist.ExpiryDate = expiryDate
+		if exist.ExpiryDate < uint64(time.Now().Unix()) {
+			exist.ExpiryDate = expiryDate
+		}
 		exist.Amount = amount
 		exist.TokenAddress = tokenAddress
 		exist.Status = status
