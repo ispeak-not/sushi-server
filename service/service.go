@@ -735,8 +735,10 @@ func (svc *Service) GetUserNfts(sub string, page int, limit int) (*Data, error) 
 
 	queryNFTs := svc.db.DB.Table("nfts").
 		Select("*").
-		Joins("JOIN recharge_nfts ON recharge_nfts.token_id = nfts.token_id").
-		Where("lower(recharge_nfts.payer) = lower(?) AND recharge_nfts.status = ? AND recharge_nfts.expiry_date > unix_timestamp(NOW())", *player.EthAddress, model.Confirmed).
+		Joins("LEFT JOIN owners ON owners.token_id = nfts.token_id").
+		Joins("LEFT JOIN recharge_nfts ON nfts.token_id = recharge_nfts.token_id AND recharge_nfts.payer = ? ", *player.EthAddress).
+		Where("lower(owners.address) = lower(?)", *player.EthAddress).
+		Or("lower(recharge_nfts.payer) = lower(?) AND recharge_nfts.status = ?", *player.EthAddress, model.Confirmed).
 		Count(&count).
 		Offset(int((page - 1) * limit)).
 		Limit(limit).
