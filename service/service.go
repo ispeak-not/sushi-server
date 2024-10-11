@@ -873,10 +873,9 @@ func (svc *Service) EarnAllowFreebie(players []model.EarnPlayer, sessionId strin
 			if err != nil {
 				return err
 			}
-			amount := player.Amount * player.Rarity
-			amount64 := float64(amount)
 			err = svc.CheckPaidPlayer(temPlayer)
 			if err != nil {
+				amount64 := float64(player.Amount)
 				err = svc.addFoodFreebieTotal(temPlayer.UserId, amount64)
 				if err != nil {
 					return err
@@ -886,6 +885,8 @@ func (svc *Service) EarnAllowFreebie(players []model.EarnPlayer, sessionId strin
 					return err
 				}
 			} else {
+				amount := player.Amount * player.Rarity
+				amount64 := float64(amount)
 				err = svc.addFoodTotal(temPlayer.UserId, amount64)
 				if err != nil {
 					return err
