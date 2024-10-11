@@ -78,7 +78,9 @@ func (svc *Service) GetBalance(sub string) (float64, float64, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	return foodTotal.EarnTotal - swapTotal.SwappedFood, swapTotal.SwappedSpeak - speakTotal.WithdrawTotal, nil
+	freebieEarnTotal := svc.getFreebieEarnTotal(player.UserId)
+
+	return foodTotal.EarnTotal - swapTotal.SwappedFood + freebieEarnTotal, swapTotal.SwappedSpeak - speakTotal.WithdrawTotal, nil
 }
 
 func NewService(db *DB.DB, log *logrus.Logger, conf *config.Config, ctx context.Context) *Service {
@@ -784,4 +786,154 @@ func (svc *Service) GetUserNfts(sub string, page int, limit int) (*Data, error) 
 	result.TotalItems = int(count)
 	result.TotalPages = int(math.Ceil(float64(count) / float64(limit)))
 	return &result, nil
+}
+
+func (svc *Service) CheckPaidPlayer(player model.Player) (err error) {
+	if player.EthAddress == nil {
+		return custom_errors.PLAYER_ETH_ADDRESS_EXIST_ERROR
+	}
+	var count int64
+	queryNFTs := svc.db.DB.Table("nfts").
+		// Joins("LEFT JOIN owners ON owners.token_id = nfts.token_id").
+		Joins("LEFT JOIN recharge_nfts ON nfts.token_id = recharge_nfts.token_id AND recharge_nfts.payer = ? ", *player.EthAddress).
+		// Where("lower(owners.address) = lower(?)", *player.EthAddress).
+		Where("lower(recharge_nfts.payer) = lower(?) AND recharge_nfts.status = ? AND recharge_nfts.expiry_date > UNIX_TIMESTAMP(NOW())", *player.EthAddress, model.Confirmed).
+		Count(&count)
+	if queryNFTs.Error != nil {
+		return queryNFTs.Error
+	}
+	if count <= 0 {
+		return custom_errors.FREE_BIE_USER_ERROR
+	}
+	return nil
+}
+
+func (svc *Service) addFoodFreebieTotal(userId uint, amount float64) error {
+	var foodTotal model.FreebieEarnTotal
+	err := svc.db.DB.Where("user_id = ?", userId).Last(&foodTotal).Error
+	if err != nil {
+		foodTotal = model.FreebieEarnTotal{
+			UserID:     userId,
+			EarnTotal:  0,
+			ExpiryDate: uint64(time.Now().Unix()) + uint64(svc.conf.NFTExpiryTime()),
+		}
+		svc.db.DB.Create(&foodTotal)
+	}
+	if amount < 0 {
+		return custom_errors.AMOUNT_ERROR
+	}
+
+	if foodTotal.ExpiryDate >= uint64(time.Now().Unix()) {
+		foodTotal.EarnTotal += amount
+		err = svc.db.DB.Save(&foodTotal).Error
+		if err != nil {
+			svc.log.Error(err)
+			return err
+		}
+	} else {
+		foodTotal = model.FreebieEarnTotal{
+			UserID:     userId,
+			EarnTotal:  amount,
+			ExpiryDate: uint64(time.Now().Unix()) + uint64(svc.conf.NFTExpiryTime()),
+		}
+		err = svc.db.DB.Create(&foodTotal).Error
+		if err != nil {
+			svc.log.Error(err)
+			return err
+		}
+	}
+	return nil
+}
+
+func (svc *Service) addFreebieRecord(userId uint, amount float64, sessionId string) error {
+
+	freeBieRecord := model.FreeBieRecord{
+		UserID:    userId,
+		Amount:    amount,
+		SessionID: sessionId,
+	}
+	result := svc.db.DB.Create(&freeBieRecord)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
+}
+
+func (svc *Service) EarnAllowFreebie(players []model.EarnPlayer, sessionId string) error {
+	for _, player := range players {
+		err := svc.checkPlayer(player.Sub)
+		if err != nil {
+			return custom_errors.PLAYER_NOT_EXIST_ERROR
+		}
+	}
+
+	err := svc.db.DB.Transaction(func(tx *gorm.DB) error {
+		for _, player := range players {
+			temPlayer, err := svc.getPlayerBySub(player.Sub)
+			if err != nil {
+				return err
+			}
+			amount := player.Amount * player.Rarity
+			amount64 := float64(amount)
+			err = svc.CheckPaidPlayer(temPlayer)
+			if err != nil {
+				err = svc.addFoodFreebieTotal(temPlayer.UserId, amount64)
+				if err != nil {
+					return err
+				}
+				err = svc.addFreebieRecord(temPlayer.UserId, amount64, sessionId)
+				if err != nil {
+					return err
+				}
+			} else {
+				err = svc.addFoodTotal(temPlayer.UserId, amount64)
+				if err != nil {
+					return err
+				}
+				err = svc.addEarnRecord(temPlayer.UserId, amount64, sessionId)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		svc.log.Error("Failed to earn", sessionId)
+		return err
+	}
+	return nil
+}
+
+func (svc *Service) getFreebieEarnTotal(userId uint) float64 {
+	var foodTotals []model.FreebieEarnTotal
+	err := svc.db.DB.Where("user_id =? AND charge_date > 0", userId).Find(&foodTotals).Error
+	if err != nil {
+		svc.log.Error(err)
+		return 0
+	}
+	total := float64(0)
+	for _, foodTotal := range foodTotals {
+		total += foodTotal.EarnTotal
+	}
+	return total
+}
+
+func (svc *Service) GetFreebieRecord(sub string) ([]model.FreeBieRecord, error) {
+	var player model.Player
+	err := svc.checkPlayer(sub)
+	if err != nil {
+		return nil, custom_errors.PLAYER_NOT_EXIST_ERROR
+	}
+	player, err = svc.getPlayerBySub(sub)
+	if err != nil {
+		return nil, err
+	}
+
+	var freeBieRecords []model.FreeBieRecord
+	err = svc.db.DB.Where("user_id = ?", player.UserId).Find(&freeBieRecords).Error
+	if err != nil {
+		return nil, err
+	}
+	return freeBieRecords, nil
 }

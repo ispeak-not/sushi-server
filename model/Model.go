@@ -196,3 +196,21 @@ type RechargeNFT struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
+
+type FreebieEarnTotal struct {
+	EarnID     uint `gorm:"primaryKey"`
+	UserID     uint `gorm:"index"`
+	EarnTotal  float64
+	ExpiryDate uint64 `json:"expiry_date"`
+	ChargeDate uint64 `gorm:"default:0"`
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type FreeBieRecord struct {
+	EarnId    uint      `gorm:"primaryKey" json:"earn_id"`
+	UserID    uint      `gorm:"index" json:"user_id"`
+	SessionID string    `json:"session_id"`
+	Amount    float64   `json:"amount"`
+	CreatedAt time.Time `json:"created_at"`
+}
