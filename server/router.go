@@ -23,7 +23,10 @@ func NewRouter(server *Server, conf config.Config, socketserver *socketio.Server
 	r.GET("/ping", server.controller.HandlePing)
 
 	//from game server(RSA 签名)
-	r.POST("/earn", server.controller.HandleEarn)
+	// API v1
+	// r.POST("/earn", server.controller.HandleEarn)
+	// API v2: support freebie
+	r.POST("/earn", server.controller.HandleEarnAllowFreebie)
 
 	//from player
 
@@ -81,6 +84,7 @@ func WithUserRoutes(r *gin.RouterGroup, server *Server, conf config.Config) {
 	authorized.GET("/withdraw_total", server.controller.HandleGetWithdrawTotal)
 	authorized.POST("/ethaddr", server.controller.HandleEditEthAddress)
 	authorized.GET("/nfts", server.controller.HandleGetNfts)
+	authorized.GET("/freebie_record", server.controller.HandleGetFreebieRecords)
 	//authorized.POST("/users/profile", server.controller.user.HandleUpdateUserInfo)
 	//authorized.GET("/users/profile", server.controller.user.HandleGetUserInfo)
 	//authorized.POST("/urls", server.controller.preSignURL.HandleURLRegister)

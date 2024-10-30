@@ -399,3 +399,40 @@ func (con *Controller) HandleGetNfts(c *gin.Context) {
 	}
 	utils.SuccessResponse(c, "ok", nfts)
 }
+func (con *Controller) HandleEarnAllowFreebie(c *gin.Context) {
+	var json EarnJson
+	if err := c.ShouldBindJSON(&json); err != nil {
+		utils.ErrorResponse(c, 401, custom_errors.BIND_JSON_ERROR.Error(), "")
+		return
+	}
+	if json.SessionID == "" {
+		utils.ErrorResponse(c, 401, custom_errors.UNVALUABLE_SESSION_ID_ERROR.Error(), "")
+		return
+	}
+	err := con.service.CheckSessionID(json.SessionID)
+	if err != nil {
+		utils.ErrorResponse(c, 501, err.Error(), "")
+		return
+	}
+	err = con.service.EarnAllowFreebie(json.Players, json.SessionID)
+	if err != nil {
+		utils.ErrorResponse(c, 501, err.Error(), "")
+		return
+	}
+	utils.SuccessResponse(c, "", "")
+}
+
+func (con *Controller) HandleGetFreebieRecords(c *gin.Context) {
+	userinfo, err := getUserInfo(c)
+	if err != nil {
+		utils.ErrorResponse(c, 501, err.Error(), "")
+		return
+	}
+
+	records, err := con.service.GetFreebieRecord(userinfo.Sub)
+	if err != nil {
+		utils.ErrorResponse(c, 501, err.Error(), "")
+		return
+	}
+	utils.SuccessResponse(c, "", records)
+}

@@ -76,8 +76,9 @@ type Metadata struct {
 	Attributes  []model.Attributes `json:"attributes"`
 }
 
-const AVG_BLOCK_CONFIRM = 5
-const AVG_BLOCK_TIME = 2
+const AVG_BLOCK_CONFIRM = 5       // block confirmation
+const AVG_BLOCK_TIME = 2          // block confirmation timestamp (seconds)
+const AVG_BLOCK_PER_QUERY = 10000 // block per query
 
 func NewHandler(worker *Worker) *Handler {
 	ctx, _ := context.WithCancel(context.Background())
@@ -97,7 +98,7 @@ func (handler *Handler) GetOwnersForContract() {
 	var pageKey *string
 	res := handler.db.DB.Where("1 = 1").Delete(&model.Owner{})
 	if res.Error != nil {
-		handler.log.Fatalf("Failed to delete old owner: %v", res.Error)
+		handler.log.Error("Failed to delete old owner:", res.Error)
 	}
 	for {
 		params := ""
@@ -108,19 +109,19 @@ func (handler *Handler) GetOwnersForContract() {
 		url := fmt.Sprintf("https://%s.g.alchemy.com/nft/v3/%s/getOwnersForContract?contractAddress=%s&withTokenBalances=true%s", handler.conf.Network(), handler.conf.APIKey(), handler.conf.NFTContractAddress(), params)
 		resp, err := http.Get(url)
 		if err != nil {
-			handler.log.Fatalf("Failed to make a request: %v", err)
+			handler.log.Error("Failed to make a request:", err)
 		}
 		defer resp.Body.Close()
 
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			handler.log.Fatalf("Failed to read the response body: %v", err)
+			handler.log.Error("Failed to read the response body:", err)
 		}
 
 		var result GetOwnersForContractResponse
 		err = json.Unmarshal([]byte(body), &result)
 		if err != nil {
-			handler.log.Fatalf("Failed to json unmarshal: %v", err)
+			handler.log.Error("Failed to json unmarshal:", err)
 		}
 		if result.Owners != nil {
 			for _, v := range result.Owners {
@@ -146,7 +147,7 @@ func (handler *Handler) getNFTsForOwners() {
 
 	owners, err := handler.findAllOwners()
 	if err != nil {
-		handler.log.Fatalf("Failed to get Owners: %v", err)
+		handler.log.Error("Failed to get Owners:", err)
 	}
 	for _, owner := range *owners {
 
@@ -160,19 +161,19 @@ func (handler *Handler) getNFTsForOwners() {
 			url := fmt.Sprintf("https://%s.g.alchemy.com/nft/v3/%s/getNFTsForOwner?owner=%s&contractAddresses[]=%s&withMetadata=true&pageSize=100%s", handler.conf.Network(), handler.conf.APIKey(), owner.Address, handler.conf.NFTContractAddress(), params)
 			resp, err := http.Get(url)
 			if err != nil {
-				handler.log.Fatalf("Failed to make a request: %v", err)
+				handler.log.Error("Failed to make a request:", err)
 			}
 			defer resp.Body.Close()
 
 			body, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
-				handler.log.Fatalf("Failed to read the response body: %v", err)
+				handler.log.Error("Failed to read the response body:", err)
 			}
 
 			var result NftsResponse
 			err = json.Unmarshal([]byte(body), &result)
 			if err != nil {
-				handler.log.Fatalf("Failed to json unmarshal: %v", err)
+				handler.log.Error("Failed to json unmarshal:", err)
 			}
 			if result.OwnedNfts != nil {
 				for _, v := range result.OwnedNfts {
@@ -499,14 +500,18 @@ func (handler *Handler) listenPastEvents(client *ethclient.Client) {
 	}
 
 	var fromBlock = latestBlock.LatestBlockNumber + 1
-	var toBlock = fromBlock + 10000
+	var toBlock = fromBlock + AVG_BLOCK_PER_QUERY
 
 	latestBlockNumber, err := client.BlockNumber(*handler.Ctx)
 	if err != nil {
-		handler.log.Fatal(err)
+		handler.log.Error(err)
 	}
 
-	for ok := true; ok; ok = toBlock < latestBlockNumber-AVG_BLOCK_CONFIRM {
+	for ok := true; ok; ok = toBlock-AVG_BLOCK_PER_QUERY < latestBlockNumber-AVG_BLOCK_CONFIRM {
+		if toBlock > latestBlockNumber-AVG_BLOCK_CONFIRM {
+			toBlock = latestBlockNumber - AVG_BLOCK_CONFIRM
+		}
+
 		query := ethereum.FilterQuery{
 			Addresses: []common.Address{common.HexToAddress(handler.conf.PaymentContractAddress())},
 			FromBlock: big.NewInt(int64(fromBlock)),
@@ -515,17 +520,17 @@ func (handler *Handler) listenPastEvents(client *ethclient.Client) {
 
 		logs, err := client.FilterLogs(*handler.Ctx, query)
 		if err != nil {
-			handler.log.Fatal(err)
+			handler.log.Error(err)
 		}
 		for _, log := range logs {
 			handler.handleLog(log, client, network.ABI, latestBlock, model.Confirmed)
 		}
+		err = handler.updateLatestBlock(toBlock, latestBlock)
+		if err != nil {
+			handler.log.Println("error to update Latest Block")
+		}
 		fromBlock = toBlock + 1
-		toBlock += 10000
-	}
-	err = handler.updateLatestBlock(latestBlockNumber, latestBlock)
-	if err != nil {
-		handler.log.Println("error to update Latest Block")
+		toBlock += AVG_BLOCK_PER_QUERY
 	}
 }
 
@@ -556,7 +561,7 @@ func (handler *Handler) subscribeRealTimeEvents(client *ethclient.Client) {
 	for {
 		select {
 		case err := <-sub.Err():
-			handler.log.Fatal(err)
+			handler.log.Error(err)
 		case log := <-logs:
 			fmt.Printf("Received log %s \n", log.BlockHash)
 			handler.handleLog(log, client, network.ABI, latestBlock, model.Confirming)
@@ -593,7 +598,13 @@ func (handler *Handler) handleLog(log types.Log, client *ethclient.Client, ABI s
 
 		err = handler.createRecharge(event.Payer.Hex(), event.Receiver.Hex(), event.TokenAddress.Hex(), event.NftId.String(), expiryDate, event.Amount.Uint64(), status)
 		if err != nil {
-			handler.log.Fatalf(err.Error())
+			handler.log.Error(err.Error())
+		}
+		if status == model.Confirmed {
+			err = handler.updateScore(event.Payer.Hex())
+			if err != nil {
+				handler.log.Error(err.Error())
+			}
 		}
 	}
 
@@ -601,4 +612,36 @@ func (handler *Handler) handleLog(log types.Log, client *ethclient.Client, ABI s
 	if err != nil {
 		handler.log.Println("error to update Latest Block")
 	}
+}
+
+func (handler *Handler) updateScore(payer string) error {
+
+	player, err := handler.getPlayerByEthAddress(payer)
+	if err != nil {
+		return err
+	}
+
+	var freebieEarnTotal model.FreebieEarnTotal
+
+	result := handler.db.DB.Where("user_id = ? AND expiry_date > UNIX_TIMESTAMP(NOW()) AND charge_date <= 0", player.UserId).Last(&freebieEarnTotal)
+	if result.Error != nil {
+		// no freebieEarn
+		return result.Error
+	} else {
+		freebieEarnTotal.ChargeDate = uint64(time.Now().Unix())
+		err = handler.db.DB.Save(&freebieEarnTotal).Error
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+func (handler *Handler) getPlayerByEthAddress(ethAddress string) (model.Player, error) {
+	var player model.Player
+	result := handler.db.DB.Where("eth_address = ?", ethAddress).First(&player)
+	if result.Error != nil {
+		return model.Player{}, result.Error
+	}
+	return player, nil
 }

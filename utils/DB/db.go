@@ -90,6 +90,16 @@ func NewDB_MySQL(log *logrus.Logger, DBPath string) *DB {
 		return nil
 	}
 
+	err = _db.AutoMigrate(model.FreebieEarnTotal{})
+	if err != nil {
+		return nil
+	}
+
+	err = _db.AutoMigrate(model.FreeBieRecord{})
+	if err != nil {
+		return nil
+	}
+
 	sqlDB.SetMaxOpenConns(100) //连接池最大连接数
 	sqlDB.SetMaxIdleConns(20)  //最大允许的空闲连接数
 	return &DB{
