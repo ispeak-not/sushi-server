@@ -737,10 +737,11 @@ func (svc *Service) GetUserNfts(sub string, page int, limit int) (*Data, error) 
 
 	queryNFTs := svc.db.DB.Table("nfts").
 		Select("*").
-		Joins("LEFT JOIN owners ON owners.token_id = nfts.token_id").
-		Joins("LEFT JOIN recharge_nfts ON nfts.token_id = recharge_nfts.token_id AND recharge_nfts.payer = ? ", *player.EthAddress).
-		Where("lower(owners.address) = lower(?)", *player.EthAddress).
-		Or("lower(recharge_nfts.payer) = lower(?) AND recharge_nfts.status = ?", *player.EthAddress, model.Confirmed).
+		Joins("LEFT JOIN owners ON owners.token_id = nfts.token_id AND owners.token_type = nfts.token_type AND lower(owners.address) = lower(?)", *player.EthAddress).
+		Joins("LEFT JOIN (SELECT token_id, MAX(created_at) AS latest_created_at FROM recharge_nfts WHERE payer = ? AND status = ? GROUP BY token_id) AS latest_recharge ON nfts.token_id = latest_recharge.token_id", *player.EthAddress, model.Confirmed).
+		Joins("LEFT JOIN recharge_nfts ON nfts.token_id = recharge_nfts.token_id AND recharge_nfts.created_at = latest_recharge.latest_created_at").
+		Where("lower(owners.address) = lower(?) AND owners.token_type= ?", *player.EthAddress, svc.conf.TokenType()).
+		Or("lower(recharge_nfts.payer) = lower(?) AND nfts.token_type= ?", *player.EthAddress, svc.conf.TokenType()).
 		Count(&count).
 		Offset(int((page - 1) * limit)).
 		Limit(limit).
@@ -763,11 +764,11 @@ func (svc *Service) GetUserNfts(sub string, page int, limit int) (*Data, error) 
 		if query.Error != nil {
 			return nil, err
 		}
-		query = svc.db.DB.Where("token_id = ?", nft.TokenId).First(&image)
+		query = svc.db.DB.Where("token_id = ? and token_type = ?", nft.TokenId, svc.conf.TokenType()).First(&image)
 		if query.Error != nil {
 			return nil, err
 		}
-		query = svc.db.DB.Where("token_id = ?", nft.TokenId).Find(&attributes)
+		query = svc.db.DB.Where("token_id = ? and token_type = ?", nft.TokenId, svc.conf.TokenType()).Find(&attributes)
 		if query.Error != nil {
 			return nil, err
 		}

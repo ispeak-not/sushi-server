@@ -103,12 +103,12 @@ type NFT struct {
 	Description     string `json:"description"`
 	TokenUri        string `json:"tokenUri"`
 	CollectionID    uint64 `json:"-"`
-	Balance         string `json:"balance"`
 	TimeLastUpdated string `json:"timeLastUpdated"`
 }
 
 type NFTImage struct {
 	TokenId      string `gorm:"index" json:"-"`
+	TokenType    string `json:"-"`
 	CachedUrl    string `json:"cachedUrl"`
 	ThumbnailUrl string `json:"thumbnailUrl"`
 	PngUrl       string `json:"pngUrl"`
@@ -118,14 +118,17 @@ type NFTImage struct {
 }
 
 type Owner struct {
-	Address string `json:"address"`
-	TokenId string `json:"tokenId"`
+	Address   string `json:"address"`
+	TokenType string `json:"-"`
+	TokenId   string `json:"tokenId"`
+	Balance   string `json:"balance"`
 }
 
 type Attributes struct {
-	TokenId string `json:"-"`
-	Type    string `json:"Type"`
-	Rarity  string `json:"Rarity"`
+	TokenId   string `json:"-"`
+	TokenType string `json:"-"`
+	Type      string `json:"Type"`
+	Rarity    string `json:"Rarity"`
 }
 
 func GetNameFromBlobID(id uint64) string {

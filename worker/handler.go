@@ -96,7 +96,7 @@ func (handler *Handler) HandleLog() {
 func (handler *Handler) GetOwnersForContract() {
 	fmt.Println("Get Owner For Contract Job Started")
 	var pageKey *string
-	res := handler.db.DB.Where("1 = 1").Delete(&model.Owner{})
+	res := handler.db.DB.Where("token_type = ?", handler.conf.TokenType()).Delete(&model.Owner{})
 	if res.Error != nil {
 		handler.log.Error("Failed to delete old owner:", res.Error)
 	}
@@ -196,7 +196,7 @@ func (handler *Handler) getNFTsForOwners() {
 
 func (handler *Handler) findAllOwners() (*[]model.Owner, error) {
 	var owners []model.Owner
-	err := handler.db.DB.Distinct("address").Select("address").Group("address").Find(&owners).Error
+	err := handler.db.DB.Distinct("address").Where("token_type = ? ", handler.conf.TokenType()).Select("address").Group("address").Find(&owners).Error
 	if err != nil {
 		return nil, err
 	}
@@ -226,18 +226,17 @@ func (handler *Handler) findOrCreateCollection(collection *model.Collection) (*m
 func (handler *Handler) createOrUpdateNFT(nftMeta *NFTMetaData, contract *model.Contract, collection *model.Collection) error {
 
 	var nft model.NFT
-	result := handler.db.DB.Where(model.NFT{TokenId: nftMeta.TokenId}).First(&nft)
+	result := handler.db.DB.Where(model.NFT{TokenId: nftMeta.TokenId, TokenType: handler.conf.TokenType()}).First(&nft)
 
 	nft = model.NFT{
 		ContractID:      contract.ContractID,
 		TokenId:         nftMeta.TokenId,
-		TokenType:       nftMeta.TokenType,
+		TokenType:       handler.conf.TokenType(),
 		Name:            nftMeta.Name,
 		Description:     nftMeta.Description,
 		TokenUri:        nftMeta.TokenUri,
 		CollectionID:    collection.CollectionID,
 		TimeLastUpdated: nftMeta.TimeLastUpdated,
-		Balance:         nftMeta.Balance,
 	}
 
 	if result.Error != nil {
@@ -258,7 +257,7 @@ func (handler *Handler) createOrUpdateNFT(nftMeta *NFTMetaData, contract *model.
 
 	if result.RowsAffected >= 1 {
 		//nft exits
-		result := handler.db.DB.Where(model.NFT{TokenId: nft.TokenId}).Updates(nft)
+		result := handler.db.DB.Where(model.NFT{TokenId: nft.TokenId, TokenType: handler.conf.TokenType()}).Updates(nft)
 		if result.Error != nil {
 			return result.Error
 		}
@@ -277,7 +276,7 @@ func (handler *Handler) createOrUpdateNFT(nftMeta *NFTMetaData, contract *model.
 
 func (handler *Handler) createOrUpdateNftImage(tokenId string, nftImage model.NFTImage) error {
 	var image model.NFTImage
-	result := handler.db.DB.Where(model.NFTImage{TokenId: tokenId}).First(&image)
+	result := handler.db.DB.Where(model.NFTImage{TokenId: tokenId, TokenType: handler.conf.TokenType()}).First(&image)
 
 	image = model.NFTImage{
 		TokenId:      tokenId,
@@ -287,6 +286,7 @@ func (handler *Handler) createOrUpdateNftImage(tokenId string, nftImage model.NF
 		ContentType:  nftImage.ContentType,
 		Size:         nftImage.Size,
 		OriginalUrl:  nftImage.OriginalUrl,
+		TokenType:    handler.conf.TokenType(),
 	}
 
 	if result.Error != nil {
@@ -299,7 +299,7 @@ func (handler *Handler) createOrUpdateNftImage(tokenId string, nftImage model.NF
 
 	if result.RowsAffected >= 1 {
 		//nft exits
-		result := handler.db.DB.Where(model.NFTImage{TokenId: image.TokenId}).Updates(&image)
+		result := handler.db.DB.Where(model.NFTImage{TokenId: image.TokenId, TokenType: handler.conf.TokenType()}).Updates(&image)
 		if result.Error != nil {
 			return result.Error
 		}
@@ -310,13 +310,14 @@ func (handler *Handler) createOrUpdateNftImage(tokenId string, nftImage model.NF
 }
 
 func (handler *Handler) createAttributes(tokenId string, attributes []model.Attributes) error {
-	handler.db.DB.Where(model.Attributes{TokenId: tokenId}).Delete(&model.Attributes{})
+	handler.db.DB.Where(model.Attributes{TokenId: tokenId, TokenType: handler.conf.TokenType()}).Delete(&model.Attributes{})
 
 	for _, v := range attributes {
 		var attribute = model.Attributes{
-			Type:    v.Type,
-			Rarity:  v.Rarity,
-			TokenId: tokenId,
+			Type:      v.Type,
+			Rarity:    v.Rarity,
+			TokenId:   tokenId,
+			TokenType: handler.conf.TokenType(),
 		}
 		result := handler.db.DB.Create(&attribute)
 		if result.Error != nil {
@@ -360,8 +361,10 @@ func (handler *Handler) createOwner(owner OwnerResponse) error {
 
 	for _, v := range owner.TokenBalances {
 		owners = append(owners, model.Owner{
-			Address: owner.OwnerAddress,
-			TokenId: v.TokenId,
+			Address:   owner.OwnerAddress,
+			TokenId:   v.TokenId,
+			Balance:   v.Balance,
+			TokenType: handler.conf.TokenType(),
 		})
 	}
 
@@ -404,20 +407,34 @@ func (handler *Handler) createRecharge(payer string, received string, tokenAddre
 
 	var exist model.RechargeNFT
 
-	result := handler.db.DB.Where(model.RechargeNFT{Payer: payer, TokenID: tokenId}).Last(&exist)
+	result := handler.db.DB.Where(model.RechargeNFT{Payer: payer}).Order("expiry_date DESC").First(&exist)
 	if result.Error != nil {
+		// User first recharge in db
 		result = handler.db.DB.Create(&recharge)
 		if result.Error != nil {
 			return result.Error
 		}
-	} else if status != model.Confirming {
-		if exist.ExpiryDate < uint64(time.Now().Unix()) {
-			exist.ExpiryDate = expiryDate
+		return nil
+	}
+	// if User already recharge and has expiry date
+	if exist.ExpiryDate > uint64(time.Now().Unix()) {
+		recharge.ExpiryDate = exist.ExpiryDate
+	}
+	// save data
+	var rechargeNft model.RechargeNFT
+	result = handler.db.DB.Where(model.RechargeNFT{Payer: payer, TokenID: tokenId, Status: model.Confirming}).Last(&rechargeNft)
+	if result.Error != nil {
+		// no record found create new record
+		result = handler.db.DB.Create(&recharge)
+		if result.Error != nil {
+			return result.Error
 		}
-		exist.Amount = amount
-		exist.TokenAddress = tokenAddress
-		exist.Status = status
-		result := handler.db.DB.Where(model.RechargeNFT{Payer: payer, TokenID: tokenId}).Updates(&exist)
+		return nil
+	}
+	if status == model.Confirmed {
+		// found the record, update status to confirmed
+		recharge.Status = model.Confirmed
+		result = handler.db.DB.Where(model.RechargeNFT{Payer: payer, TokenID: tokenId, Status: model.Confirming}).Updates(&recharge)
 		if result.Error != nil {
 			return result.Error
 		}
