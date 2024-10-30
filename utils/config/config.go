@@ -25,6 +25,7 @@ type configData struct {
 	// worker
 	APIKey                 string `mapstructure:"api_key"`
 	NFTContractAddress     string `mapstructure:"nft_contract_address"`
+	TokenType              string `mapstructure:"token_type"`
 	WorkerPort             int    `mapstructure:"worker_port"`
 	SyncBlockNumber        uint64 `mapstructure:"sync_block_number"`
 	Network                string `mapstructure:"network"`
@@ -115,6 +116,13 @@ func (c *Config) SpecSchedule() string {
 
 func (c *Config) SyncBlockNumber() uint64 {
 	return c.config.SyncBlockNumber
+}
+
+func (c *Config) TokenType() string {
+	if c.config.TokenType != "ERC721" && c.config.TokenType != "ERC1155" {
+		return "ERC721" // default ERC721
+	}
+	return c.config.TokenType
 }
 
 func (c *Config) LogLevel() logrus.Level {
