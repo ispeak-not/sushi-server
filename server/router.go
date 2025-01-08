@@ -21,7 +21,7 @@ func NewRouter(server *Server, conf config.Config, socketserver *socketio.Server
 
 	//public
 	r.GET("/ping", server.controller.HandlePing)
-	r.GET("/users/exist", server.controller.HandleGetUserExist)
+	r.POST("/users/exist", server.controller.HandleGetUserExist)
 
 	//from game server(RSA 签名)
 	// API v1
