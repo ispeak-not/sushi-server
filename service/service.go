@@ -707,6 +707,7 @@ type Data struct {
 
 type NFTWithRecharge struct {
 	model.NFT
+	Balance    int64 `json:"balance"`
 	Amount     int64 `json:"rechargeAmount"`
 	ExpiryDate int64 `json:"expiryDate"`
 }
