@@ -313,6 +313,27 @@ func (con *Controller) HandleGetWithdrawTotal(c *gin.Context) {
 	utils.SuccessResponse(c, "", withdraw)
 }
 
+func (con *Controller) HandleGetUserExist(c *gin.Context) {
+	var json UserInfo
+	if err := c.ShouldBindJSON(&json); err != nil {
+		utils.ErrorResponse(c, 401, custom_errors.BIND_JSON_ERROR.Error(), "")
+		return
+	}
+
+	if json.Mail == "" {
+		utils.ErrorResponse(c, 401, "input mail is empty", "")
+		return
+	}
+
+	exists, err := con.service.CheckPlayerExistByMail(json.Mail)
+	if err != nil {
+		utils.ErrorResponse(c, 501, err.Error(), "")
+		return
+
+	}
+	utils.SuccessResponse(c, "ok", exists)
+}
+
 func (con *Controller) HandleGetUserInfo(c *gin.Context) {
 	userinfo, err := getUserInfo(c)
 	if err != nil {

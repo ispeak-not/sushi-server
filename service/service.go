@@ -134,7 +134,7 @@ func (svc *Service) NewPlayer(mail string, sub string) error {
 		return nil
 	})
 	if err != nil {
-		svc.log.Error("Failed to create new player: %d", mail)
+		svc.log.Error("Failed to create new player: ", mail)
 		return err
 	}
 	svc.log.Info("New player:", mail)
@@ -526,6 +526,20 @@ func (svc *Service) checkPlayer(sub string) error {
 	}
 	//not exist
 	return custom_errors.PLAYER_NOT_EXIST_ERROR
+}
+
+func (svc *Service) CheckPlayerExistByMail(mail string) (bool, error) {
+	var player model.Player
+	result := svc.db.DB.Where("mail = ?", mail).Find(&player)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	if result.RowsAffected >= 1 {
+		//exist
+		return true, nil
+	}
+	//not exist
+	return false, nil
 }
 
 func (svc *Service) GetMonthWithdraw(sub string) (float64, error) {
