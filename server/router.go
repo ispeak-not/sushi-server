@@ -1,7 +1,11 @@
 package server
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
+	"sushi/model"
 	"sushi/utils"
 	"sushi/utils/config"
 	"sushi/utils/ratelimit"
@@ -98,27 +102,42 @@ func (server Server) GetAuth() gin.HandlerFunc {
 		token := c.GetHeader("Authorization")
 
 		parts := strings.Split(token, " ")
-		if token == "" {
+		if parts[1] == "" {
 			utils.ErrorResponse(c, 400, "token not found", "")
 			return
 		}
 
-		err := utils.VerifyFirebaseJWT(server.service.Firebase, *server.service.Ctx, parts[1])
+		req, err := http.NewRequest("GET", server.config.Auth0URL()+"/userinfo", nil)
 		if err != nil {
-			utils.ErrorResponse(c, 400, "wrong project", "")
+			utils.ErrorResponse(c, 500, err.Error(), "")
+			return
+		}
+		req.Header.Add("Authorization", token)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			utils.ErrorResponse(c, 500, err.Error(), "")
+			return
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+
+		if err != nil {
+			utils.ErrorResponse(c, 500, err.Error(), "")
 			return
 		}
 
-		detail, err := utils.CheckFirebaseJWT(parts[1])
-		if err != nil {
-			utils.ErrorResponse(c, 400, err.Error(), "")
-			return
-		}
+		var userInfo model.Auth0UserInfo
+		json.Unmarshal(body, &userInfo)
 
-		firebaseSub := detail.Sub
-		c.Set("sub", firebaseSub)
-		c.Set("name", detail.Name)
-		c.Set("mail", detail.Email)
+		// if !userInfo.EmailVerified {
+		// 	utils.ErrorResponse(c, 400, "email not verified", "")
+		// 	return
+		// }
+
+		c.Set("sub", userInfo.Sub)
+		c.Set("name", userInfo.Name)
+		c.Set("mail", userInfo.Email)
 	}
 }
 
