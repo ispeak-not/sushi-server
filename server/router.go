@@ -103,6 +103,7 @@ func (server Server) GetAuth() gin.HandlerFunc {
 
 		userInfo, err := utils.GetUserInfo(server.config.Auth0URL()+"/userinfo", c, token)
 		if err != nil {
+			server.log.Error(err.Error())
 			utils.ErrorResponse(c, 500, err.Error(), "")
 			return
 		}

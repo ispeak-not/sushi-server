@@ -22,19 +22,19 @@ func GetUserInfo(url string, c *gin.Context, token string) (Auth0UserInfo, error
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return Auth0UserInfo{}, fmt.Errorf("http.NewRequest error")
+		return Auth0UserInfo{}, fmt.Errorf("http.NewRequest error: %s", err.Error())
 	}
 	req.Header.Add("Authorization", token)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return Auth0UserInfo{}, fmt.Errorf("http.DefaultClient.Do error")
+		return Auth0UserInfo{}, fmt.Errorf("http.DefaultClient.Do error: %s", err.Error())
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return Auth0UserInfo{}, fmt.Errorf("io.ReadAll error")
+		return Auth0UserInfo{}, fmt.Errorf("io.ReadAll error: %s", err.Error())
 	}
 
 	userInfo := Auth0UserInfo{}
