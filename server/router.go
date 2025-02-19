@@ -1,11 +1,7 @@
 package server
 
 import (
-	"encoding/json"
-	"io"
-	"net/http"
 	"strings"
-	"sushi/model"
 	"sushi/utils"
 	"sushi/utils/config"
 	"sushi/utils/ratelimit"
@@ -107,33 +103,11 @@ func (server Server) GetAuth() gin.HandlerFunc {
 			return
 		}
 
-		req, err := http.NewRequest("GET", server.config.Auth0URL()+"/userinfo", nil)
+		userInfo, err := utils.GetUserInfo(server.config.Auth0URL()+"/userinfo", c, token)
 		if err != nil {
 			utils.ErrorResponse(c, 500, err.Error(), "")
 			return
 		}
-		req.Header.Add("Authorization", token)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			utils.ErrorResponse(c, 500, err.Error(), "")
-			return
-		}
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-
-		if err != nil {
-			utils.ErrorResponse(c, 500, err.Error(), "")
-			return
-		}
-
-		var userInfo model.Auth0UserInfo
-		json.Unmarshal(body, &userInfo)
-
-		// if !userInfo.EmailVerified {
-		// 	utils.ErrorResponse(c, 400, "email not verified", "")
-		// 	return
-		// }
 
 		c.Set("sub", userInfo.Sub)
 		c.Set("name", userInfo.Name)
