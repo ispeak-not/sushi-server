@@ -1,7 +1,6 @@
 package server
 
 import (
-	"strings"
 	"sushi/utils"
 	"sushi/utils/config"
 	"sushi/utils/ratelimit"
@@ -97,8 +96,7 @@ func (server Server) GetAuth() gin.HandlerFunc {
 		c.Set("sub", "")
 		token := c.GetHeader("Authorization")
 
-		parts := strings.Split(token, " ")
-		if parts[1] == "" {
+		if token == "" {
 			utils.ErrorResponse(c, 400, "token not found", "")
 			return
 		}
