@@ -35,6 +35,9 @@ type configData struct {
 	// nft expiry
 	NFTExpiryTime int `mapstructure:"nft_expiry_time"`
 	//TxProcessorConfig TxProcessorConfig `mapstructure:"tx_processor_config"`
+
+	// auth0
+	Auth0URL string `mapstructure:"auth0_url"`
 }
 
 func NewConfig() (*Config, error) {
@@ -127,6 +130,10 @@ func (c *Config) TokenType() string {
 
 func (c *Config) LogLevel() logrus.Level {
 	return c.config.LogLevel
+}
+
+func (c *Config) Auth0URL() string {
+	return c.config.Auth0URL
 }
 
 //

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"strings"
 	"sushi/utils"
 	"sushi/utils/config"
 	"sushi/utils/ratelimit"
@@ -97,28 +96,21 @@ func (server Server) GetAuth() gin.HandlerFunc {
 		c.Set("sub", "")
 		token := c.GetHeader("Authorization")
 
-		parts := strings.Split(token, " ")
 		if token == "" {
 			utils.ErrorResponse(c, 400, "token not found", "")
 			return
 		}
 
-		err := utils.VerifyFirebaseJWT(server.service.Firebase, *server.service.Ctx, parts[1])
+		userInfo, err := utils.GetUserInfo(server.config.Auth0URL()+"/userinfo", c, token)
 		if err != nil {
-			utils.ErrorResponse(c, 400, "wrong project", "")
+			server.log.Error(err.Error())
+			utils.ErrorResponse(c, 500, err.Error(), "")
 			return
 		}
 
-		detail, err := utils.CheckFirebaseJWT(parts[1])
-		if err != nil {
-			utils.ErrorResponse(c, 400, err.Error(), "")
-			return
-		}
-
-		firebaseSub := detail.Sub
-		c.Set("sub", firebaseSub)
-		c.Set("name", detail.Name)
-		c.Set("mail", detail.Email)
+		c.Set("sub", userInfo.Sub)
+		c.Set("name", userInfo.Name)
+		c.Set("mail", userInfo.Email)
 	}
 }
 
